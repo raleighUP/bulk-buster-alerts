@@ -1,4 +1,10 @@
-import { supabase } from '../packages/database/supabase'
+import 'dotenv/config'
+import {
+  Client,
+  Events,
+  GatewayIntentBits,
+} from 'discord.js'
+import { supabase } from '../../packages/database/supabase'
 
 type CardPriceRow = {
   card_id: string
@@ -28,7 +34,10 @@ function parsePrice(value: number | string | null): number | null {
   if (value === null) return null
 
   const parsed = Number(value)
-  return Number.isNaN(parsed) ? null : parsed
+
+  if (Number.isNaN(parsed)) return null
+
+  return parsed
 }
 
 function getCardInfo(row: CardPriceRow) {
@@ -40,28 +49,7 @@ function getCardInfo(row: CardPriceRow) {
   }
 }
 
-async function getCompetitiveCardIds() {
-  const { data, error } = await supabase
-    .from('competitive_card_usage')
-    .select('card_id')
-    .not('card_id', 'is', null)
-
-  if (error) {
-    throw error
-  }
-
-  return new Set(
-    (data ?? [])
-      .map((row) => row.card_id)
-      .filter((cardId): cardId is string => Boolean(cardId))
-  )
-}
-
-async function findRisers() {
-  const competitiveCardIds = await getCompetitiveCardIds()
-
-  console.log(`Loaded ${competitiveCardIds.size} competitive card ids.`)
-
+async function getRisers() {
   const { data, error } = await supabase
     .from('card_prices')
     .select(`
@@ -76,20 +64,15 @@ async function findRisers() {
     .order('collected_at', { ascending: true })
 
   if (error) {
-    console.error('Supabase error:', error)
-    return
+    throw error
   }
 
   const rows = (data ?? []) as CardPriceRow[]
-
-  console.log(`Loaded ${rows.length} price rows.`)
-
   const grouped = new Map<string, Snapshot[]>()
 
   for (const row of rows) {
-    if (!competitiveCardIds.has(row.card_id)) continue
-
     const marketPrice = parsePrice(row.market_price)
+
     if (marketPrice === null) continue
 
     const cardInfo = getCardInfo(row)
@@ -106,8 +89,6 @@ async function findRisers() {
     existing.push(snapshot)
     grouped.set(row.card_id, existing)
   }
-
-  console.log(`Found ${grouped.size} competitive cards with price data.`)
 
   const risers = []
 
@@ -132,7 +113,7 @@ async function findRisers() {
         ? (dollarGain / oldest.marketPrice) * 100
         : 0
 
-    const wasBulk = oldest.marketPrice <= 3
+    const wasBulk = oldest.marketPrice <= 2
 
     const meaningfulMove =
       percentGain >= 25 &&
@@ -150,27 +131,50 @@ async function findRisers() {
     })
   }
 
-  risers.sort((a, b) => b.percentGain - a.percentGain)
-
-  console.log('\nBulk Buster Competitive Risers\n')
-
-  if (risers.length === 0) {
-    console.log('No competitive bulk risers found yet.')
-    return
-  }
-
-  for (const card of risers.slice(0, 25)) {
-    console.log(
-      `${card.name}
-${card.setName}
-$${card.oldPrice.toFixed(2)} → $${card.newPrice.toFixed(2)}
-+${card.percentGain.toFixed(1)}% / +$${card.dollarGain.toFixed(2)}
-----------------`
-    )
-  }
+  return risers.sort((a, b) => b.percentGain - a.percentGain)
 }
 
-findRisers().catch((error) => {
-  console.error(error)
-  process.exit(1)
+const token = process.env.DISCORD_TOKEN
+
+if (!token) {
+  throw new Error('Missing DISCORD_TOKEN.')
+}
+
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds],
 })
+
+client.once(Events.ClientReady, (readyClient) => {
+  console.log(`Logged in as ${readyClient.user.tag}`)
+})
+
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!interaction.isChatInputCommand()) return
+
+  if (interaction.commandName === 'risers') {
+    await interaction.deferReply()
+
+    const risers = await getRisers()
+
+    if (risers.length === 0) {
+      await interaction.editReply('No bulk risers found yet.')
+      return
+    }
+
+    const message = risers
+      .slice(0, 10)
+      .map((card, index) => {
+        return [
+          `**${index + 1}. ${card.name}**`,
+          card.setName,
+          `$${card.oldPrice.toFixed(2)} → $${card.newPrice.toFixed(2)}`,
+          `+${card.percentGain.toFixed(1)}% / +$${card.dollarGain.toFixed(2)}`,
+        ].join('\n')
+      })
+      .join('\n\n')
+
+    await interaction.editReply(message)
+  }
+})
+
+client.login(token)

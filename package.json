@@ -20,6 +20,7 @@
   "homepage": "https://github.com/raleighUP/bulk-buster-alerts#readme",
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",
+    "discord.js": "^14.26.4",
     "dotenv": "^17.4.2",
     "tsx": "^4.22.0",
     "typescript": "^6.0.3"
