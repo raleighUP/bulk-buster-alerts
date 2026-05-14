@@ -1,0 +1,29 @@
+{
+  "name": "bulk-buster-alerts",
+  "version": "1.0.0",
+  "description": "From the Bulk box to the Mail box",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/raleighUP/bulk-buster-alerts.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/raleighUP/bulk-buster-alerts/issues"
+  },
+  "homepage": "https://github.com/raleighUP/bulk-buster-alerts#readme",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "tsx": "^4.22.0",
+    "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.8.0"
+  }
+}
